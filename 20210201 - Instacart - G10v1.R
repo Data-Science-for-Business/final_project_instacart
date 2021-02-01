@@ -45,24 +45,28 @@ insta_table_train <- insta_table[insta_table$eval_set == 'train',] #filter the t
 nrow(insta_table_prior)
 nrow(insta_table_train)
 
-##Step 5: FEATURE ENGINEERING
-#----------------------------
-insta_table_prior_top_1000 <- (head(insta_table_prior, 100))
+##Step 5: FEATURE ENGINEERING AND TRANSFORM THE DATA TO A PRODUCT_CUSTOMER PAIR
+#------------------------------------------------------------------------------
+insta_table_prior <- (head(insta_table_prior, 100))
 View(insta_table_prior_top_1000)
+memory.limit()
+memory.limit(size=56000)
 
-sqldf("SELECT user_id, product_id, product_name, COUNT(*) as Freq
-       FROM insta_table_prior_top_1000
-       GROUP BY user_id, product_id, product_name")
+user_product_prior_df <- sqldf("SELECT user_id, product_id, product_name, COUNT(*) as Freq
+                          FROM insta_table_prior
+                          GROUP BY user_id, product_id, product_name")
 
+user_product_train_df <- sqldf("SELECT user_id, product_id, product_name, COUNT(*) as Freq
+                          FROM insta_table_train
+                          GROUP BY user_id, product_id, product_name")
 
-##Step 6: TRANSFORM THE DATA TO A PRODUCT_CUSTOMER PAIR
-#------------------------------------------------------
+joined_prior_train <- left_join(user_product_prior_df, user_product_train_df, by = c("user_id", "product_id"))
 
+names(joined_prior_train)[names(joined_prior_train) == "Freq.x"] <- "prior_purchase_count" #number of times the product has already been purchased
+joined_prior_train$Freq.y[is.na(joined_prior_train$Freq.y)] <- 0 #Replace NA's with a 0
+names(joined_prior_train)[names(joined_prior_train) == "Freq.y"] <- "re_order" #number of times the product has already been purchased
+final_df <- subset(joined_prior_train, select = -c(product_name.y))
 
-
-
-
-
-
+final_df
 
 
