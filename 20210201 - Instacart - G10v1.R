@@ -66,7 +66,12 @@ names(joined_prior_train)[names(joined_prior_train) == "Freq.x"] <- "prior_purch
 joined_prior_train$Freq.y[is.na(joined_prior_train$Freq.y)] <- 0 #Replace NA's with a 0
 names(joined_prior_train)[names(joined_prior_train) == "Freq.y"] <- "re_order" #number of times the product has already been purchased
 final_df <- subset(joined_prior_train, select = -c(product_name.y))
+final_df$re_order <- as.factor(final_df$re_order) 
+
+str(final_df)
 
 final_df
 
+##Step 6: CLASSIFICATION MODEL 1: XGBOOST
+#----------------------------------------
 
