@@ -38,10 +38,8 @@ insta_table <- left_join(expanded_orders_v3, aisles_csv, by = c("aisle_id"))
 
 insta_table$days_since_prior_order[is.na(insta_table$days_since_prior_order)] <- 0 #Replace NA's with a 0
 
-#names(insta_table)[names(insta_table) == "Freq.y"] <- "re_order" #number of times the product has already been purchased
-
-str(insta_table)
-colSums(is.na(insta_table))
+str(insta_table) #this is the core combined table including all the records from Kaggle
+colSums(is.na(insta_table)) #check if there are still NA's
 
 head(insta_table, 10)
 class(insta_table)
@@ -78,11 +76,12 @@ nrow(insta_table_prior)
 train_user_ids <- sqldf("SELECT DISTINCT user_id
                           FROM insta_table_train")
 
+
 nrow(train_user_ids)
 str(train_user_ids) #-> this is a unique list of user_ids that are part of the training set
 
 #->Select only the insta_table_prior records that belong to eventual train user_ids
-insta_table_prior_trainers_only <- right_join(insta_table_prior, train_user_ids, by = c("user_id")) #--> this join works as a filter
+insta_table_prior_trainers_only <- right_join(insta_table_prior, train_user_ids, by = c("user_id")) #--> this join works as a filter, removing all prior orders from test users
 
 #------------------------------------------------------------------------------|
 ##Step 5: FEATURE ENGINEERING AND TRANSFORM THE DATA TO A PRODUCT_CUSTOMER PAIR|
@@ -113,8 +112,6 @@ gc()
 #----------------------------------------
 
 
-
-
 #----------------------------------------------------------------------------#
 #--------------------XG BOOST MODEL -----------------------------------------#
 #----------------------------------------------------------------------------#
@@ -124,21 +121,45 @@ pacman::p_load("caret","ROCR","lift","xgboost") #Check, and if needed install th
 #use same training and testing data to ensure like-for-like comparison
 #note - additional memory must be allocated to r before running this code
 
-memory.limit(size=6000000)
+#Remove product_name.x column from final_df. Product_id is already part of df as factor
+final_df2 <- subset(final_df, select = -c(product_name.x))
+head(final_df2)
+str(final_df2)
 
-training.XG <-model.matrix(reordered~., data = insta_table_prior)
-testing.XG <-model.matrix(reordered~., data = insta_table_train)
+#Create a train set and a test set, the latter being a subset of the train set
+TRAIN__final_df_user_subset_df <- final_df2[final_df2$user_id < 1001,] #Choose the first 1000 users to minimize the load
+TEST__final_df_user_subset_df <- final_df2 %>%   filter(user_id >1000 &  user_id < 1500) #Choose the user_ids between 1000-1500 as test users
+
+TRAIN__final_df_user_subset_df$user_id <- as.factor(TRAIN__final_df_user_subset_df$user_id) #cast user_ids as factor
+TEST__final_df_user_subset_df$user_id <- as.factor(TEST__final_df_user_subset_df$user_id) #cast user_ids as factor
+
+str(TRAIN__final_df_user_subset_df)
+str(TEST__final_df_user_subset_df)
+
+training.XG <-model.matrix(re_order~., data = TRAIN__final_df_user_subset_df) ### DO NOT RUN THIS LINE OF CODE, IT WILL BREAK YOUR LAPTOP! :(
+testing.XG <-model.matrix(re_order~., data = TEST__final_df_user_subset_df)
 
 model_XGboost<-xgboost(data = data.matrix(training.XG[,-1]), 
-                       label = as.numeric(as.character(insta_table_prior$reordered)), 
+                       label = as.numeric(as.character(TRAIN__final_df_user_subset_df$re_order)), 
                        eta = 0.1,       # hyperparameter: learning rate 
                        max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
                        nround=50,       # hyperparameter: number of boosting iterations  
                        objective = "binary:logistic"
 )
 
-XGboost_prediction<-predict(model_XGboost,newdata=testing.XG[,-1], type="response") #Predict classification (for confusion matrix)
-confusionMatrix(as.factor(ifelse(XGboost_prediction>0.22,1,0)),insta_table_prior$reordered,positive="1") #Display confusion matrix
+
+
+
+
+#--------------------------------------------------------------------------------
+####ROBBERT DID NOT WORK REVIEW CODE BELOW###||||||||||||||||||||||||||||||||||||
+#--------------------------------------------------------------------------------
+
+XGboost_prediction<-predict(model_XGboost, newdata=testing.XG[,-1], type="response") #Predict classification (for confusion matrix)
+confusionMatrix(as.factor(ifelse(XGboost_prediction>0.5,1,0)),
+                TRAIN__final_df_user_subset_df$re_order,
+                positive="1") #Display confusion matrix
+
 
 ####ROC Curve
 XGboost_pred_testing <- prediction(XGboost_prediction, insta_table_prior$reordered) #Calculate errors
