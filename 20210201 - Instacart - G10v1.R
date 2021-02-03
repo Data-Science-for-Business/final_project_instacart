@@ -105,64 +105,97 @@ final_df$re_order <- as.factor(final_df$re_order)
 
 str(final_df)
 
-final_df
+head(final_df)
 gc()
 
-##Step 6: CLASSIFICATION MODEL 1: XGBOOST
-#----------------------------------------
+products_csv2 <- products_csv
+products_csv2$product_id <- as.factor(products_csv2$product_id) 
+products_csv2$aisle_id <- as.factor(products_csv2$aisle_id)
+products_csv2$department_id <- as.factor(products_csv2$department_id)
 
+
+final_df_aisles <- left_join(final_df, products_csv2, by = c("product_id"))
+head(final_df_aisles)
+str(final_df_aisles)
+
+#-------------------------------------------------
+#----------function to remove rare levels--------
+
+combinerarecategories<-function(data_frame,mincount){ 
+  for (i in 1 : ncol(data_frame)){
+    a<-data_frame[,i]
+    replace <- names(which(table(a) < mincount))
+    levels(a)[levels(a) %in% replace] <-paste("Other",colnames(data_frame)[i],sep=".")
+    data_frame[,i]<-a }
+  return(data_frame) }
+
+#------------------------------------------------------------------------------|
+##Step 6: BRING IN ENGINEERED FEEATURES
+#------------------------------------------------------------------------------|
+
+pacman::p_load("caret","ROCR","lift","xgboost") #Check, and if needed install the necessary packages
+
+#Decrease the number of users loaded in the XGBOOST Model
+TRAIN_USERS <- final_df_aisles[final_df_aisles$user_id < 5001,]
+TEST_USERS <- final_df_aisles  %>%   filter(user_id >5000 &  user_id < 5500)
+
+#Remove product_name.x column from final_df. Product_id is already part of df as factor
+TRAIN_USERS_v2 <- subset(TRAIN_USERS, select = -c(product_name.x))
+TRAIN_USERS_v3 <- subset(TRAIN_USERS_v2, select = -c(product_id))
+TRAIN_USERS_v4 <- subset(TRAIN_USERS_v3, select = -c(user_id))
+TRAIN_USERS_v5 <- subset(TRAIN_USERS_v4, select = -c(product_name))
+
+TRAIN_USERS_vF <- TRAIN_USERS_v5[, c(4,3,1,2)]
+head(TRAIN_USERS_vF,40)
+str(TRAIN_USERS_vF)
+
+#Remove product_name.x column from final_df. Product_id is already part of df as factor
+TEST_USERS_v2 <- subset(TEST_USERS, select = -c(product_name.x))
+TEST_USERS_v3 <- subset(TEST_USERS_v2, select = -c(product_id))
+TEST_USERS_v4 <- subset(TEST_USERS_v3, select = -c(user_id))
+TEST_USERS_v5 <- subset(TEST_USERS_v4, select = -c(product_name))
+
+TEST_USERS_vF <- TEST_USERS_v5[, c(4,3,1,2)]
+head(TEST_USERS_vF, 1000)
+str(TEST_USERS_vF)
+
+combinerarecategories(TRAIN_USERS_vF, 5)
+combinerarecategories(TEST_USERS_vF, 5)
+
+#------------------------------------------------------------------------------|
+##END OF FEATURE ENGINEERING FILE
+#------------------------------------------------------------------------------|
+
+#------------------------------------------------------------------------------|
+##Step 7: RUNNING AND TESTING MODELS
+#------------------------------------------------------------------------------|
 
 #----------------------------------------------------------------------------#
 #--------------------XG BOOST MODEL -----------------------------------------#
 #----------------------------------------------------------------------------#
 
-pacman::p_load("caret","ROCR","lift","xgboost") #Check, and if needed install the necessary packages
 
-#use same training and testing data to ensure like-for-like comparison
-#note - additional memory must be allocated to r before running this code
+training.XG <-model.matrix(re_order~., data = TRAIN_USERS_vF)
+testing.XG <-model.matrix(re_order~., data = TEST_USERS_vF)
 
-#Remove product_name.x column from final_df. Product_id is already part of df as factor
-final_df2 <- subset(final_df, select = -c(product_name.x))
-head(final_df2)
-str(final_df2)
-
-#Create a train set and a test set, the latter being a subset of the train set
-TRAIN__final_df_user_subset_df <- final_df2[final_df2$user_id < 1001,] #Choose the first 1000 users to minimize the load
-TEST__final_df_user_subset_df <- final_df2 %>%   filter(user_id >1000 &  user_id < 1500) #Choose the user_ids between 1000-1500 as test users
-
-TRAIN__final_df_user_subset_df$user_id <- as.factor(TRAIN__final_df_user_subset_df$user_id) #cast user_ids as factor
-TEST__final_df_user_subset_df$user_id <- as.factor(TEST__final_df_user_subset_df$user_id) #cast user_ids as factor
-
-str(TRAIN__final_df_user_subset_df)
-str(TEST__final_df_user_subset_df)
-
-training.XG <-model.matrix(re_order~., data = TRAIN__final_df_user_subset_df) ### DO NOT RUN THIS LINE OF CODE, IT WILL BREAK YOUR LAPTOP! :(
-testing.XG <-model.matrix(re_order~., data = TEST__final_df_user_subset_df)
+#colSums(is.na(training.XG))#just double checking
+#colSums(is.na(testing.XG))
 
 model_XGboost<-xgboost(data = data.matrix(training.XG[,-1]), 
-                       label = as.numeric(as.character(TRAIN__final_df_user_subset_df$re_order)), 
+                       label = as.numeric(as.character(TRAIN_USERS_vF$re_order)), 
                        eta = 0.1,       # hyperparameter: learning rate 
                        max_depth = 20,  # hyperparameter: size of a tree in each boosting iteration
                        nround=50,       # hyperparameter: number of boosting iterations  
-                       objective = "binary:logistic"
-)
-
-
-
-
-
-#--------------------------------------------------------------------------------
-####ROBBERT DID NOT WORK REVIEW CODE BELOW###||||||||||||||||||||||||||||||||||||
-#--------------------------------------------------------------------------------
+                       objective = "binary:logistic")
 
 XGboost_prediction<-predict(model_XGboost, newdata=testing.XG[,-1], type="response") #Predict classification (for confusion matrix)
-confusionMatrix(as.factor(ifelse(XGboost_prediction>0.5,1,0)),
-                TRAIN__final_df_user_subset_df$re_order,
+confusionMatrix(as.factor(ifelse(XGboost_prediction>0.2,1,0)),
+                TEST_USERS_vF$re_order,
                 positive="1") #Display confusion matrix
 
 
 ####ROC Curve
-XGboost_pred_testing <- prediction(XGboost_prediction, insta_table_prior$reordered) #Calculate errors
+XGboost_pred_testing <- prediction(XGboost_prediction, TEST_USERS_vF$re_order) #Calculate errors
 XGboost_ROC_testing <- performance(XGboost_pred_testing,"tpr","fpr") #Create ROC curve data
 plot(XGboost_ROC_testing) #Plot ROC curve
 
@@ -172,6 +205,4 @@ XGboost_auc_testing <- as.numeric(auc.tmp@y.values) #Calculate AUC
 XGboost_auc_testing #Display AUC value: 90+% - excellent, 80-90% - very good, 70-80% - good, 60-70% - so so, below 60% - not much value
 
 #### Lift chart
-plotLift(XGboost_prediction, insta_table_prior$XXXXXXXXXX, cumulative = TRUE, n.buckets = 10) # Plot Lift chart
-
-
+#code not done: plotLift(XGboost_prediction, insta_table_prior$XXXXXXXXXX, cumulative = TRUE, n.buckets = 10) # Plot Lift chart
