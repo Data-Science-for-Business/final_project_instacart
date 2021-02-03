@@ -7,7 +7,6 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(psych)
-library(FactoMineR)
 
 #Function Mode
 Mode2 <- function(x) {
@@ -15,8 +14,8 @@ Mode2 <- function(x) {
   ux[which.max(tabulate(match(x, ux)))]
 }
 
-#orders <- fread(file.path("C:/Users/Kevin/Documents/GitHub/final_project_instacart/Data", "orders.csv"))
-orders <- fread(file.choose(), showProgress = FALSE)
+orders <- fread(file.path("C:/Users/Kevin/Documents/GitHub/final_project_instacart/Data", "orders.csv"))
+#orders <- fread(file.choose(), showProgress = FALSE)
 
 orders$user_id <- as.factor(orders$user_id)
 orders$eval_set <- as.factor(orders$eval_set)
@@ -30,7 +29,7 @@ df_users <- orders %>%
     # number_of_item_in_basket = .... need to add more data we do not have it with only orders
     order_hour_of_day = mean(order_hour_of_day),
     order_dow = Mode2(order_dow),
-    days_since_prior_order_average = (sum(days_since_prior_order, na.rm = T))/(max(order_number)-1),
+    days_since_prior_order_average = (sum(days_since_prior_order, na.rm = T))/(max(order_number)-1)
     #days_since_prior_order_current = last #I have issue with mutate and the grouping, to be solve later or added directly in the featured engineered data
   )
 
@@ -64,7 +63,7 @@ hclust_method = "ward.D"
 kmeans_method = "Lloyd"
 
 ProjectData <- data.matrix(df_users) 
-
+str(ProjectData )
 
 segmentation_attributes_used <- intersect(segmentation_attributes_used, 1:ncol(ProjectData))
 profile_attributes_used <- intersect(profile_attributes_used, 1:ncol(ProjectData))
@@ -82,6 +81,7 @@ kmeans_clusters <- kmeans(ProjectData_segment,centers= numb_clusters_used, iter.
 ProjectData_with_kmeans_membership <- cbind(1:length(kmeans_clusters$cluster),kmeans_clusters$cluster)
 colnames(ProjectData_with_kmeans_membership)<-c("Observation Number_k","Cluster_Membership_k")
 
+head(ProjectData_with_kmeans_membership)
 write.csv(round(ProjectData_with_kmeans_membership, 2), file = "ProjectData_with_kmeans_membership.csv")
 
 
@@ -111,21 +111,52 @@ write.csv(round(ProjectData_with_hclust_membership, 2), file = "ProjectData_with
 
 
 #---------------------------------
-#analyze the data, should we do that ?
-factor_attributes_used <- intersect(profile_attributes_used, 1:ncol(ProjectData))
-ProjectDataFactor <- ProjectData[,factor_attributes_used]
-ProjectDataFactor <- data.matrix(ProjectDataFactor)
-thecor = round(cor(ProjectDataFactor),2)
-print(round(thecor,2), scale=TRUE)
-UnRotated_Results<-principal(ProjectDataFactor, nfactors=ncol(ProjectDataFactor), rotate="none",score=TRUE)
-UnRotated_Factors<-round(UnRotated_Results$loadings,2)
-UnRotated_Factors<-as.data.frame(unclass(UnRotated_Factors))
-colnames(UnRotated_Factors)<-paste("Comp",1:ncol(UnRotated_Factors),sep="")
-Variance_Explained_Table_results<-PCA(ProjectDataFactor, graph=FALSE)
-Variance_Explained_Table<-Variance_Explained_Table_results$eig
-Variance_Explained_Table_copy<-Variance_Explained_Table
-rownames(Variance_Explained_Table) <- paste("Component", 1:nrow(Variance_Explained_Table), sep=" ")
-colnames(Variance_Explained_Table) <- c("Eigenvalue", "Pct of explained variance", "Cumulative pct of explained variance")
-print(round(Variance_Explained_Table, 2))
+#clusturing on products
 
+order_product_prior <- fread(file.path("C:/Users/Kevin/Documents/GitHub/final_project_instacart/Data", "order_products__prior.csv"))
+#orders <- fread(file.choose(), showProgress = FALSE)
+
+order_product_prior$product_id <- as.factor(order_product_prior$product_id)
+order_product_prior$order_id <- as.factor(order_product_prior$order_id)
+#str(order_product_prior)
+
+df_products <- order_product_prior %>%
+  group_by(product_id) %>%
+  summarise(
+    number_of_orders = n(),
+    percentage_reordered =  (sum(reordered, na.rm = T)/n()),
+    when_added_to_cart_average = mean(add_to_cart_order),
+    count_added_to_cart_first = sum(add_to_cart_order==1),
+    percentage_added_to_cart_first = count_added_to_cart_first/number_of_orders
+    #count_added_to_cart_first = sum(order_product_prior[order_product_prior$add_to_cart_order == '1'], na.rm=T) 
+  )
+
+head(df_products)
+View(df_products)
+
+segmentation_attributes_used_product = c(2,3,4,5,6) 
+profile_attributes_used_product = c(2:6) 
+numb_clusters_used = 100
+
+ProjectData_product <- data.matrix(df_products) 
+str(ProjectData_product )
+
+segmentation_attributes_used_product <- intersect(segmentation_attributes_used_product, 1:ncol(ProjectData_product))
+profile_attributes_used_product <- intersect(profile_attributes_used_product, 1:ncol(ProjectData_product))
+
+ProjectData_segment_product <- ProjectData_product[,segmentation_attributes_used_product]
+ProjectData_profile_product <- ProjectData_product[,profile_attributes_used_product]
+
+ProjectData_scaled_product <- apply(ProjectData_product, 2, function(r) if (sd(r)!=0) (r-mean(r))/sd(r) else 0*r)
+
+
+#------------------------------------------------------------------------------------------------------
+#kmean products
+kmeans_clusters_product <- kmeans(ProjectData_segment_product,centers= numb_clusters_used, iter.max=2000, algorithm=kmeans_method)
+
+ProjectData_with_kmeans_membership_product <- cbind(1:length(kmeans_clusters_product$cluster),kmeans_clusters_product$cluster)
+colnames(ProjectData_with_kmeans_membership_product)<-c("Observation Number_k","Cluster_Membership_k")
+
+head(ProjectData_with_kmeans_membership_product)
+write.csv(round(ProjectData_with_kmeans_membership_product, 2), file = "ProjectData_with_kmeans_membership_product.csv")
 
