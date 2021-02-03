@@ -13,8 +13,8 @@ Mode2 <- function(x) {
   ux[which.max(tabulate(match(x, ux)))]
 }
 
-orders <- fread(file.path("C:/Users/Kevin/Documents/GitHub/final_project_instacart/Data", "orders.csv"))
-#orders <- fread(file.choose(), showProgress = FALSE)
+#orders <- fread(file.path("C:/Users/Kevin/Documents/GitHub/final_project_instacart/Data", "orders.csv"))
+orders <- fread(file.choose(), showProgress = FALSE)
 
 orders$user_id <- as.factor(orders$user_id)
 orders$eval_set <- as.factor(orders$eval_set)
@@ -29,7 +29,7 @@ df_users <- orders %>%
     order_hour_of_day = mean(order_hour_of_day),
     order_dow = Mode2(order_dow),
     days_since_prior_order_average = (sum(days_since_prior_order, na.rm = T))/(max(order_number)-1),
-    #days_since_prior_order_current = last #I have issue with mutate and the grouping, to be solve later or added directly in the featured enginerred data
+    #days_since_prior_order_current = last #I have issue with mutate and the grouping, to be solve later or added directly in the featured engineered data
   )
 
 #head(df_users)
@@ -37,12 +37,12 @@ df_users <- orders %>%
 nrow(df_users)
 str(df_users)
 
-#proof of concept
-df_users <- df_users %>%
-  slice(1:15000)
+#need to reduce the number of ID for HC cluster.
+#df_users2 <- df_users %>%
+#  slice(1:15000)
 
 #---------------------------------------------------------------
-#Step 2: create segments
+#Step 2: create segments, preparation
 
 
 # Run below only once, then comment out
@@ -72,6 +72,9 @@ ProjectData_profile <- ProjectData[,profile_attributes_used]
 ProjectData_scaled <- apply(ProjectData, 2, function(r) if (sd(r)!=0) (r-mean(r))/sd(r) else 0*r)
 
 
+#------------------------------------------------------------------------------------------------------
+#hccluster
+
 euclidean_pairwise <- as.matrix(dist(head(ProjectData_segment, max_data_report), method="euclidean"))
 euclidean_pairwise <- euclidean_pairwise*lower.tri(euclidean_pairwise) + euclidean_pairwise*diag(euclidean_pairwise) + 10e10*upper.tri(euclidean_pairwise)
 euclidean_pairwise[euclidean_pairwise==10e10] <- NA
@@ -89,9 +92,16 @@ cluster_memberships_hclust <- as.vector(cutree(Hierarchical_Cluster, k=numb_clus
 cluster_ids_hclust=unique(cluster_memberships_hclust)
 
 ProjectData_with_hclust_membership <- cbind(1:length(cluster_memberships_hclust),cluster_memberships_hclust)
-colnames(ProjectData_with_hclust_membership)<-c("Observation Number","Cluster_Membership")
+colnames(ProjectData_with_hclust_membership)<-c("user_id","Cluster_Membership")
 
 write.csv(round(ProjectData_with_hclust_membership, 2), file = "ProjectData_with_hclust_membership.csv")
 
 
+#------------------------------------------------------------------------------------------------------
+#kmean
+kmeans_clusters <- kmeans(ProjectData_segment,centers= numb_clusters_used, iter.max=2000, algorithm=kmeans_method)
 
+ProjectData_with_kmeans_membership <- cbind(1:length(kmeans_clusters$cluster),kmeans_clusters$cluster)
+colnames(ProjectData_with_kmeans_membership)<-c("Observation Number_k","Cluster_Membership_k")
+
+write.csv(round(ProjectData_with_kmeans_membership, 2), file = "ProjectData_with_kmeans_membership.csv")
