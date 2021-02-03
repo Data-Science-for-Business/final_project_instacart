@@ -6,6 +6,8 @@ library(data.table)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(psych)
+library(FactoMineR)
 
 #Function Mode
 Mode2 <- function(x) {
@@ -63,6 +65,7 @@ kmeans_method = "Lloyd"
 
 ProjectData <- data.matrix(df_users) 
 
+
 segmentation_attributes_used <- intersect(segmentation_attributes_used, 1:ncol(ProjectData))
 profile_attributes_used <- intersect(profile_attributes_used, 1:ncol(ProjectData))
 
@@ -70,6 +73,16 @@ ProjectData_segment <- ProjectData[,segmentation_attributes_used]
 ProjectData_profile <- ProjectData[,profile_attributes_used]
 
 ProjectData_scaled <- apply(ProjectData, 2, function(r) if (sd(r)!=0) (r-mean(r))/sd(r) else 0*r)
+
+
+#------------------------------------------------------------------------------------------------------
+#kmean
+kmeans_clusters <- kmeans(ProjectData_segment,centers= numb_clusters_used, iter.max=2000, algorithm=kmeans_method)
+
+ProjectData_with_kmeans_membership <- cbind(1:length(kmeans_clusters$cluster),kmeans_clusters$cluster)
+colnames(ProjectData_with_kmeans_membership)<-c("Observation Number_k","Cluster_Membership_k")
+
+write.csv(round(ProjectData_with_kmeans_membership, 2), file = "ProjectData_with_kmeans_membership.csv")
 
 
 #------------------------------------------------------------------------------------------------------
@@ -97,11 +110,22 @@ colnames(ProjectData_with_hclust_membership)<-c("user_id","Cluster_Membership")
 write.csv(round(ProjectData_with_hclust_membership, 2), file = "ProjectData_with_hclust_membership.csv")
 
 
-#------------------------------------------------------------------------------------------------------
-#kmean
-kmeans_clusters <- kmeans(ProjectData_segment,centers= numb_clusters_used, iter.max=2000, algorithm=kmeans_method)
+#---------------------------------
+#analyze the data, should we do that ?
+factor_attributes_used <- intersect(profile_attributes_used, 1:ncol(ProjectData))
+ProjectDataFactor <- ProjectData[,factor_attributes_used]
+ProjectDataFactor <- data.matrix(ProjectDataFactor)
+thecor = round(cor(ProjectDataFactor),2)
+print(round(thecor,2), scale=TRUE)
+UnRotated_Results<-principal(ProjectDataFactor, nfactors=ncol(ProjectDataFactor), rotate="none",score=TRUE)
+UnRotated_Factors<-round(UnRotated_Results$loadings,2)
+UnRotated_Factors<-as.data.frame(unclass(UnRotated_Factors))
+colnames(UnRotated_Factors)<-paste("Comp",1:ncol(UnRotated_Factors),sep="")
+Variance_Explained_Table_results<-PCA(ProjectDataFactor, graph=FALSE)
+Variance_Explained_Table<-Variance_Explained_Table_results$eig
+Variance_Explained_Table_copy<-Variance_Explained_Table
+rownames(Variance_Explained_Table) <- paste("Component", 1:nrow(Variance_Explained_Table), sep=" ")
+colnames(Variance_Explained_Table) <- c("Eigenvalue", "Pct of explained variance", "Cumulative pct of explained variance")
+print(round(Variance_Explained_Table, 2))
 
-ProjectData_with_kmeans_membership <- cbind(1:length(kmeans_clusters$cluster),kmeans_clusters$cluster)
-colnames(ProjectData_with_kmeans_membership)<-c("Observation Number_k","Cluster_Membership_k")
 
-write.csv(round(ProjectData_with_kmeans_membership, 2), file = "ProjectData_with_kmeans_membership.csv")
