@@ -5,7 +5,7 @@
 #----------------------------------------------------------------------------#
 #--------------------XG BOOST MODEL -----------------------------------------#
 #----------------------------------------------------------------------------#
-
+pacman::p_load("caret","partykit","ROCR","lift","rpart","e1071", "base")
 
 training.XG <-model.matrix(re_order~., data = TRAIN_USERS_vF)
 testing.XG <-model.matrix(re_order~., data = TEST_USERS_vF)
@@ -40,9 +40,28 @@ XGboost_auc_testing #Display AUC value: 90+% - excellent, 80-90% - very good, 70
 #### Lift chart
 #code not done: plotLift(XGboost_prediction, insta_table_prior$XXXXXXXXXX, cumulative = TRUE, n.buckets = 10) # Plot Lift chart
 
-#pull out the X highest probability items for each customer
-numRecommendations <- 5
-for (i in XGboost_prediction){
+#importance of each feature to model
+importanceTable <- xgb.importance(colnames(training.XG), model_XGboost)
+head(importanceTable)
+
+
+#put probabilities in with customer IDs and product IDs (use TEST_USERS becuase that is last DF that has IDs still)
+prediction_df <- cbind(TEST_USERS, XGboost_prediction)
+prediction_df$user_id <- as.integer(prediction_df$user_id)
+prediction_df$product_id <- as.integer(prediction_df$product_id)
+
+
+
+#sort by user ID in ascending order, then by prediction probability in descending order
+prediction_sorted <- prediction_df[with(prediction_df, order(prediction_df$user_id , -prediction_df$XGboost_prediction))]
+View(prediction_sorted)
+
+#output top X products for user Y
+sample_user <- 3201
+number_recs <- 5
+user_output <- prediction_sorted[prediction_sorted$user_id == sample_user]
+for(i in 1:number_recs){
+  print(user_output[i]$product_id)
   
 }
 
@@ -52,13 +71,13 @@ for (i in XGboost_prediction){
 #-----------------------------------------------------------------------
 #------------------------CART Model-------------------------------------
 #-----------------------------------------------------------------------
-pacman::p_load("caret","partykit","ROCR","lift","rpart","e1071")
+
 
 CART_cp = rpart.control(cp = 0.0001) #set cp to a small number to "grow" a large tree
 
 rpart_tree<-rpart(re_order~.,data=TRAIN_USERS_vF, method="class", control=CART_cp) #"Grow" a tree on training data
 
-prunned_rpart_tree<-prune(rpart_tree, cp=0.0007) #Prune the tree. Play with cp to see how the resultant tree changes
+prunned_rpart_tree<-prune(rpart_tree, cp=0.001) #Prune the tree. Play with cp to see how the resultant tree changes
 plot(as.party(prunned_rpart_tree), type = "extended",gp = gpar(fontsize = 7)) #Plotting the tree (adjust fontsize if needed)
 
 # Understand the relationship between the cross-validated error, size of the tree and cp.
