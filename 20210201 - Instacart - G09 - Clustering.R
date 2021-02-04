@@ -1,6 +1,7 @@
 #clustering
 Sys.setenv(LANG = "en")
 
+#----------------------------------------------------
 #Step 1: create data frame for clustering by user ID
 
 library(data.table)
@@ -8,6 +9,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(psych)
+library(tibble)
 
 #Function Mode
 Mode2 <- function(x) {
@@ -40,7 +42,7 @@ df_users <- orders %>%
 #str(df_users)
 
 #---------------------------------------------------------------
-#Step 2: create segments, preparation
+#Step 2: Preparation
 
 
 # Run below only once, then comment out
@@ -72,7 +74,7 @@ ProjectData_scaled <- apply(ProjectData, 2, function(r) if (sd(r)!=0) (r-mean(r)
 
 
 #------------------------------------------------------------------------------------------------------
-#kmean
+#kmean for user ID
 kmeans_clusters <- kmeans(ProjectData_segment,centers= numb_clusters_used, iter.max=2000, algorithm=kmeans_method)
 
 ProjectData_with_kmeans_membership <- cbind(1:length(kmeans_clusters$cluster),kmeans_clusters$cluster)
@@ -114,14 +116,15 @@ df_products <- order_product_prior %>%
   )
 
 #head(df_products)
-#View(df_products)
+View(df_products)
 
 segmentation_attributes_used_product = c(2,3,4,5,6) 
 profile_attributes_used_product = c(2:6) 
 numb_clusters_used_product = 100
 
-ProjectData_product <- data.matrix(df_products) 
+ProjectData_product <- apply(as.matrix(df_products[,1:6]),2,as.numeric) 
 str(ProjectData_product )
+View(ProjectData_product)
 
 segmentation_attributes_used_product <- intersect(segmentation_attributes_used_product, 1:ncol(ProjectData_product))
 profile_attributes_used_product <- intersect(profile_attributes_used_product, 1:ncol(ProjectData_product))
@@ -133,54 +136,47 @@ ProjectData_scaled_product <- apply(ProjectData_product, 2, function(r) if (sd(r
 
 
 #------------------------------------------------------------------------------------------------------
-#kmean products
+#kmean on products
 kmeans_clusters_product <- kmeans(ProjectData_segment_product,centers= numb_clusters_used_product, iter.max=2000, algorithm=kmeans_method)
 
 ProjectData_with_kmeans_membership_product <- cbind(1:length(kmeans_clusters_product$cluster),kmeans_clusters_product$cluster)
-colnames(ProjectData_with_kmeans_membership_product)<-c("product_id","Cluster_Membership_k")
+colnames(ProjectData_with_kmeans_membership_product)<-c("product_id","product_Cluster_Membership_k")
 
 str(ProjectData_with_kmeans_membership_product)
 
-user_id_k_means_product <- (ProjectData_with_kmeans_membership_product)
-user_id_k_means_product
+product_id_k_means <- (ProjectData_with_kmeans_membership_product)
 
-user_id_k_means_product_df <- as.data.frame((user_id_k_means_product))
-user_id_k_means_product_df$product_id <- as.factor(user_id_k_means_product_df$product_id) 
-user_id_k_means_product_df$Cluster_Membership_k <- as.factor(user_id_k_means_product_df$Cluster_Membership_k) 
+product_id_k_means_df <- as.data.frame((product_id_k_means))
+product_id_k_means_df$product_id <- as.factor(df_products$product_id) 
+product_id_k_means_df$product_Cluster_Membership_k <- as.factor(product_id_k_means_df$product_Cluster_Membership_k) 
 
-user_id_k_means_product_df_vF <- user_id_k_means_df
-View(user_id_k_means_product)
+
+product_id_k_means_df_vF <- product_id_k_means_df
+View(product_id_k_means_df)
 
 #write.csv(round(ProjectData_with_kmeans_membership_product, 2), file = "ProjectData_with_kmeans_membership_product.csv")
 
-
 #------------------------------------------------------------------------------------------------------
-#hccluster -> define the number of cluster for product -> answer 15-16.
+#hccluster -> define the number of cluster for users -> answer 4 for ID and 
 
 df_users2 <- df_users %>%
-  slice(1:10000)
+  slice(1:15000)
 
-df_product2 <- df_products %>%
-  slice(1:10000)
-
-
-#Choose 1.
 ProjectData_hc <- data.matrix(df_users2) 
-#ProjectData_hc <- data.matrix(df_product2) 
 
 segmentation_attributes_used_hc <- intersect(segmentation_attributes_used, 1:ncol(ProjectData_hc))
 profile_attributes_used_hc <- intersect(profile_attributes_used, 1:ncol(ProjectData_hc))
 
-ProjectData_segment_hc <- ProjectData_hc[,segmentation_attributes_used_hc]
-ProjectData_profile_hc <- ProjectData_hc[,profile_attributes_used_hc]
+ProjectData_segment_hc <- ProjectData_hc[,segmentation_attributes_used]
+ProjectData_profile_hc <- ProjectData_hc[,profile_attributes_used]
 
 euclidean_pairwise <- as.matrix(dist(head(ProjectData_segment_hc, max_data_report), method="euclidean"))
 euclidean_pairwise <- euclidean_pairwise*lower.tri(euclidean_pairwise) + euclidean_pairwise*diag(euclidean_pairwise) + 10e10*upper.tri(euclidean_pairwise)
 euclidean_pairwise[euclidean_pairwise==10e10] <- NA
 rownames(euclidean_pairwise) <- colnames(euclidean_pairwise) <- sprintf("Obs.%02d", 1:max_data_report)
 
-Pairwise_Distances <- dist(ProjectData_segment, method = distance_used) 
-Hierarchical_Cluster_distances <- dist(ProjectData_segment, method=distance_used)
+Pairwise_Distances <- dist(ProjectData_segment_hc, method = distance_used) 
+Hierarchical_Cluster_distances <- dist(ProjectData_segment_hc, method=distance_used)
 Hierarchical_Cluster <- hclust(Hierarchical_Cluster_distances, method=hclust_method)
 
 #plot(Hierarchical_Cluster, labels = NULL, hang = 0.1, 
@@ -191,17 +187,35 @@ Hierarchical_Cluster <- hclust(Hierarchical_Cluster_distances, method=hclust_met
 num <- nrow(ProjectData_hc) - 1
 df1 <- cbind(as.data.frame(Hierarchical_Cluster$height[length(Hierarchical_Cluster$height):1]), c(1:num))
 colnames(df1) <- c("distances","index")
-plot(df1, 20, xlab="Number of ", xlim=c(0,40))
-
-
-#cluster_memberships_hclust <- as.vector(cutree(Hierarchical_Cluster, k=numb_clusters_used)) # cut tree into as many clusters as numb_clusters_used
-#cluster_ids_hclust=unique(cluster_memberships_hclust)
-
-#ProjectData_with_hclust_membership <- cbind(1:length(cluster_memberships_hclust),cluster_memberships_hclust)
-#colnames(ProjectData_with_hclust_membership)<-c("user_id","Cluster_Membership")
-
-#write.csv(round(ProjectData_with_hclust_membership, 2), file = "ProjectData_with_hclust_membership.csv")
-
+plot(df1, 20, xlab="Number of ", xlim=c(0,20))
 
 #------------------------------------------------------------------------------------------------------
-#hccluster -> define the number of cluster for product -> answer 15.
+#hccluster -> define the number of cluster for product -> answer 4 for products
+
+
+df_product2 <- df_products %>%
+  slice(1:15000)
+
+ProjectData_hc <- data.matrix(df_product2) 
+
+segmentation_attributes_used_hc <- intersect(segmentation_attributes_used_product, 1:ncol(ProjectData_hc))
+profile_attributes_used_hc <- intersect(profile_attributes_used_product, 1:ncol(ProjectData_hc))
+
+ProjectData_segment_hc <- ProjectData_hc[,segmentation_attributes_used_product]
+ProjectData_profile_hc <- ProjectData_hc[,profile_attributes_used_product]
+
+euclidean_pairwise <- as.matrix(dist(head(ProjectData_segment_hc, max_data_report), method="euclidean"))
+euclidean_pairwise <- euclidean_pairwise*lower.tri(euclidean_pairwise) + euclidean_pairwise*diag(euclidean_pairwise) + 10e10*upper.tri(euclidean_pairwise)
+euclidean_pairwise[euclidean_pairwise==10e10] <- NA
+rownames(euclidean_pairwise) <- colnames(euclidean_pairwise) <- sprintf("Obs.%02d", 1:max_data_report)
+
+Pairwise_Distances <- dist(ProjectData_segment_hc, method = distance_used) 
+Hierarchical_Cluster_distances <- dist(ProjectData_segment_hc, method=distance_used)
+Hierarchical_Cluster <- hclust(Hierarchical_Cluster_distances, method=hclust_method)
+
+num <- nrow(ProjectData_hc) - 1
+df1 <- cbind(as.data.frame(Hierarchical_Cluster$height[length(Hierarchical_Cluster$height):1]), c(1:num))
+colnames(df1) <- c("distances","index")
+plot(df1, 20, xlab="Number of ", xlim=c(0,20))
+
+
