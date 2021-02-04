@@ -139,13 +139,13 @@ kmeans_clusters_product <- kmeans(ProjectData_segment_product,centers= numb_clus
 ProjectData_with_kmeans_membership_product <- cbind(1:length(kmeans_clusters_product$cluster),kmeans_clusters_product$cluster)
 colnames(ProjectData_with_kmeans_membership_product)<-c("product_id","Cluster_Membership_k")
 
-head(ProjectData_with_kmeans_membership_product)
+str(ProjectData_with_kmeans_membership_product)
 
 user_id_k_means_product <- (ProjectData_with_kmeans_membership_product)
 user_id_k_means_product
 
-user_id_k_means_product_df <- as.data.frame((user_id_k_means))
-user_id_k_means_product_df$product_id <- as.factor(user_id_k_means_df$product_id) 
+user_id_k_means_product_df <- as.data.frame((user_id_k_means_product))
+user_id_k_means_product_df$product_id <- as.factor(user_id_k_means_product_df$product_id) 
 user_id_k_means_product_df$Cluster_Membership_k <- as.factor(user_id_k_means_product_df$Cluster_Membership_k) 
 
 user_id_k_means_product_df_vF <- user_id_k_means_df
