@@ -269,39 +269,6 @@ View(feature_output_vFF_sorted)
 str(feature_output_vFF_sorted)
 feature_output_vFF_sorted$normal_purchase_time <- as.factor(feature_output_vFF_sorted$normal_purchase_time)
 
-#-------------------------------------------------------------------------------------|
-#####CLUSTERING OUTPUT: Add User_Id Clusters                                          |
-
-##NOTE! Need to have run Kevin's Clustering.R script to get the variables in
-
-user_id_k_means_df_vF
-
-#Join the user_id clusters
-nrow(user_id_k_means_df_vF) #Check if the total unique number of user_ids matches
-colSums(is.na(user_id_k_means_df_vF)) #check if there are no missing values in the clustering file
-feature_output_vFF_w_cluster1 <- left_join(feature_output_vFF_sorted, user_id_k_means_df_vF, by = c("user_id"))
-
-#Join the product_id clusters
-nrow(product_id_k_means_df_vF) #Check if the total unique number of user_ids matches
-colSums(is.na(product_id_k_means_df_vF)) #check if there are no missing values in the clustering file
-feature_output_vFF_w_cluster2 <- left_join(feature_output_vFF_w_cluster1, product_id_k_means_df_vF, by = c("product_id"))
-
-#Final check bringing in the two clusters
-nrow(feature_output_vFF_w_cluster2) #Check if the total unique number of user_ids matches
-colSums(is.na(feature_output_vFF_w_cluster2)) #check if there are no missing values in the clustering file
-
-#Clean NA's
-feature_output_vFF_w_cluster2$Product_Cluster_Membership_k[is.na(feature_output_vFF_w_cluster2$Product_Cluster_Membership_k)] <- "Other"
-feature_output_vFF_w_cluster2$Product_Cluster_Membership_k <- as.factor(feature_output_vFF_w_cluster2$Product_Cluster_Membership_k)
-
-#Final output of clustering join
-feature_output_vFF_w_cluster_VF <- feature_output_vFF_w_cluster2
-nrow(feature_output_vFF_w_cluster_VF) #Check if the total unique number of user_ids matches
-colSums(is.na(feature_output_vFF_w_cluster_VF)) #check if there are no missing values in the clustering file
-
-str(feature_output_vFF_w_cluster_VF)
-head(feature_output_vFF_w_cluster_VF)
-
 #------------------------------------------------------------------------------|
 ##Step 6: CoNNECT THE REORDER EVENT TO THE FEATURE OUTPUT TABLE                |
 #------------------------------------------------------------------------------|
@@ -316,7 +283,7 @@ user_product_train_df <- sqldf("SELECT user_id, product_id, COUNT(*) as re_order
                           GROUP BY user_id, product_id, product_name")
 
 str(user_product_prior_df)
-str(feature_output_vFF_w_cluster_VF)
+str(feature_output_vFF_sorted)
 str(user_product_train_df)
 
 #create a copy of user_id, which is an integer to the core df
@@ -327,7 +294,7 @@ user_product_prior_df_VF <- user_product_prior_df
 str(user_product_prior_df_VF)
 
 #join this copy to the master feature_ouptut sheet
-joined_feature_output_train_reorder <- left_join(feature_output_vFF_w_cluster_VF, user_product_prior_df_VF, by = c("user_id", "product_id"))
+joined_feature_output_train_reorder <- left_join(feature_output_vFF_sorted, user_product_prior_df_VF, by = c("user_id", "product_id"))
 str(joined_feature_output_train_reorder)
 
 #Join the train order events to the master feature_output sheet
